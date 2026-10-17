@@ -1,0 +1,26 @@
+[project]
+name = "enterprise-gatekeeper"
+version = "0.1.0"
+description = "Gatekeeper: Entra ID sign-in + server-side RBAC for a sample AI app, with a /proof page."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "msal",
+    "pyjwt[crypto]",
+    "anthropic",
+    "httpx",
+    "jinja2",
+    "itsdangerous",
+    "python-dotenv",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]

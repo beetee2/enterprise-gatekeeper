@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+.tokens/
+*.secret
+__pycache__/
+.venv/
+.pytest_cache/
+# generated per tenant; name the tenant and its users
+docs/entra-objects.json
+docs/proof/latest.json

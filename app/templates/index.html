@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h1>Sample AI app behind Entra ID</h1>
+  <p>Users sign in with the customer's Microsoft Entra ID. Every API call carries an Entra access token,
+  which the server validates (RS256 signature against the tenant's keys, issuer, audience, tenant, expiry, scope).
+  The token's <code>roles</code> claim decides which data collections the user may read, and only those rows ever reach the model.</p>
+  {% if not s.entra_configured %}{% include "_notconfigured.html" %}{% else %}
+  <div class="banner ok">Entra ID configured for tenant <code>{{ s.tenant_id }}</code>.</div>
+  {% endif %}
+  {% if not s.ai_configured %}
+  <div class="banner info">AI not configured: set <code>ANTHROPIC_API_KEY</code> in <code>.env</code>. Access checks still run; allowed questions return 503.</div>
+  {% endif %}
+  <p><a class="button" href="/proof">Open the proof page</a> <a class="button ghost" href="/playground">Open the playground</a></p>
+  <h2>API</h2>
+  <ul class="plain">
+    <li><code>GET /api/me</code> — validated identity and roles</li>
+    <li><code>GET /api/data/{collection}</code> — raw rows, 403 if not permitted</li>
+    <li><code>POST /api/ask</code> — <code>{"question", "collections"}</code>, 403 if any collection is denied</li>
+    <li><code>POST /api/admin/roles</code> — dry run, Tenant Admin only</li>
+  </ul>
+</section>
+{% endblock %}

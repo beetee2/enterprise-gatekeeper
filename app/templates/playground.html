@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Gatekeeper playground{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="head-row">
+    <div>
+      <h1>Playground</h1>
+      <p class="muted">Pick a user and a call, change anything, then press <strong>Send</strong>. Each send is a real HTTP call to
+      this API with that user's Entra token (the token stays on the server). The trace shows what the server's own code did.
+      Back to the <a href="/proof">proof page</a>.</p>
+    </div>
+  </div>
+  {% if not s.entra_configured %}{% include "_notconfigured.html" %}{% endif %}
+  {% if entra_problem %}<div class="banner info">{{ entra_problem }}. Portal links and Entra object ids are hidden; the trace still works.</div>{% endif %}
+  <h2 class="pg-sub">Presets <small class="muted">fill the form; you still press Send</small></h2>
+  <div class="presets" id="presets"></div>
+</section>
+
+<div class="pg-grid">
+  <section class="panel pg-pane" aria-labelledby="who-h">
+    <h2 id="who-h" class="pg-h">1 · Who</h2>
+    <div class="pg-users" role="radiogroup" aria-label="User">
+      {% for u in users %}
+      <label class="pg-user">
+        <input type="radio" name="user" value="{{ u.key }}" {% if loop.first %}checked{% endif %}>
+        <span class="pg-user-body">
+          <strong class="wrap">{{ u.upn or ("GK_USER_" ~ u.key|upper ~ " not set") }}</strong>
+          <span class="pg-user-meta">
+            {% if u.signed_in %}<span class="tag pass">Signed in</span>{% else %}<span class="tag muted-tag">{{ u.problem or "Not signed in" }}</span>{% endif %}
+            {% if u.roles is not none %}{% for r in u.roles %}<code>{{ r }}</code> {% else %}<em>no roles</em>{% endfor %}{% else %}<small class="muted">expects <code>{{ u.expected_role }}</code></small>{% endif %}
+          </span>
+          {% if s.entra_configured %}<a class="pg-signin" href="/auth/login?user={{ u.key }}">{{ "Sign in again" if u.signed_in else "Sign in" }}</a>{% endif %}
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+    <h3 class="pg-h3">Permission table <small class="muted">app/rbac.py = CONTRACT.md</small></h3>
+    <div id="perm"></div>
+    <p id="perm-why" class="pg-why"></p>
+
+    <h3 class="pg-h3">Token claims</h3>
+    <div id="claims" class="pg-claims"></div>
+  </section>
+
+  <section class="panel pg-pane" aria-labelledby="req-h">
+    <h2 id="req-h" class="pg-h">2 · Request</h2>
+    <form id="req" autocomplete="off">
+      <fieldset class="pg-calls">
+        <legend>Call</legend>
+        <label><input type="radio" name="call" value="me" checked> <code>GET /api/me</code></label>
+        <label><input type="radio" name="call" value="data"> <code>GET /api/data/{collection}</code></label>
+        <label><input type="radio" name="call" value="ask"> <code>POST /api/ask</code></label>
+        <label><input type="radio" name="call" value="admin"> <code>POST /api/admin/roles</code></label>
+      </fieldset>
+
+      <div class="pg-field" id="f-collection" hidden>
+        <label for="collection-pick">Path parameter <code>{collection}</code></label>
+        <div class="pg-inline">
+          <select id="collection-pick"></select>
+          <input id="collection-text" type="text" maxlength="64" spellcheck="false" placeholder="type any value, e.g. FINANCE_revenue" hidden>
+        </div>
+      </div>
+
+      <div class="pg-field" id="f-body" hidden>
+        <label for="body">JSON body</label>
+        <textarea id="body" rows="6" spellcheck="false"></textarea>
+        <small id="body-hint" class="pg-hint" role="status"></small>
+      </div>
+
+      <div class="pg-field">
+        <span class="pg-label">Extra headers</span>
+        <div id="headers"></div>
+        <button type="button" class="button small ghost" id="add-header">Add header</button>
+      </div>
+
+      <div class="pg-field">
+        <label for="token-mode">Token</label>
+        <div class="pg-inline">
+          <select id="token-mode"></select>
+          <select id="forged-role" aria-label="Forged role" hidden></select>
+        </div>
+      </div>
+
+      <div class="pg-field">
+        <span class="pg-label">Request preview</span>
+        <pre id="preview" class="pg-pre"></pre>
+      </div>
+
+      <div class="pg-actions">
+        <button type="submit" class="button" id="send" {% if not s.entra_configured %}disabled{% endif %}>Send</button>
+        <button type="button" class="button ghost" id="copy-curl">Copy as curl</button>
+        <span id="send-status" class="muted" role="status"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel pg-pane" aria-labelledby="res-h">
+    <h2 id="res-h" class="pg-h">3 · What happened</h2>
+    <div id="result"><p class="muted">Nothing sent yet. Pick a preset or build a request, then press Send.</p></div>
+    <h3 class="pg-h3">History <small class="muted">this tab, last 10</small></h3>
+    <ol id="history" class="pg-history"><li class="muted">No sends yet.</li></ol>
+  </section>
+</div>
+<script type="application/json" id="pg-data">{{ data | tojson }}</script>
+<script src="/static/playground.js"></script>
+{% endblock %}

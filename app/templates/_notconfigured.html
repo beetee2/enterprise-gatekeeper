@@ -1,0 +1,5 @@
+<div class="banner warn">
+  <strong>Not configured — run <code>scripts/provision.sh</code>.</strong>
+  <p>There is no Entra tenant connection yet, so nobody can sign in and every API call returns 401.
+  Missing in <code>.env</code>: {% for k in s.missing %}<code>{{ k }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+</div>

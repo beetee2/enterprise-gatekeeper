@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Gatekeeper proof{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="head-row">
+    <div>
+      <h1>Access proof</h1>
+      <p class="muted">Three real Entra users, three app roles. Each check is a real HTTP call to this API with that user's own access token.
+      To try one call at a time and see how the server decides it, open the <a href="/playground">playground</a>.</p>
+    </div>
+    <button id="run" class="button" {% if not s.entra_configured %}disabled{% endif %}>Run proof</button>
+  </div>
+  <p id="run-status" class="muted" role="status"></p>
+  {% if not s.entra_configured %}{% include "_notconfigured.html" %}{% endif %}
+  {% if not s.ai_configured %}
+  <div class="banner info">AI not configured (<code>ANTHROPIC_API_KEY</code> missing). Allowed questions return 503 and are marked
+  <span class="tag ai">AI not configured</span>; that is separate from the access verdict, which is still checked.</div>
+  {% endif %}
+</section>
+
+<section class="cards">
+  {% for c in cards %}
+  <article class="card">
+    <h2 class="wrap">{{ c.upn or ("GK_USER_" ~ c.key|upper ~ " not set") }}</h2>
+    <dl>
+      <dt>Role</dt><dd><code>{{ c.expected_role }}</code></dd>
+      <dt>Status</dt>
+      <dd>{% if c.signed_in %}<span class="tag pass">Signed in</span>{% else %}<span class="tag muted-tag">{{ c.problem or "Not signed in" }}</span>{% endif %}</dd>
+      <dt>Token roles</dt>
+      <dd>{% if c.roles is not none %}{% for r in c.roles %}<code>{{ r }}</code> {% else %}<em>none</em>{% endfor %}{% else %}—{% endif %}</dd>
+    </dl>
+    {% if s.entra_configured %}
+    <a class="button small {% if c.signed_in %}ghost{% endif %}" href="/auth/login?user={{ c.key }}">{% if c.signed_in %}Sign in again{% else %}Sign in{% endif %}</a>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+
+{% if result %}
+{% set sm = result.summary %}
+{# A result without a verdict predates the canary leak scan: never show it green. #}
+{% set verdict = sm.verdict or "INCOMPLETE" %}
+<section class="panel">
+  <p class="summary {{ {'PASS': 'good', 'INCOMPLETE': 'warn'}.get(verdict, 'bad') }}">{{ verdict }} · {{ sm.passed }}/{{ sm.total }} checks passed</p>
+  {% if verdict == "INCOMPLETE" %}
+  <p class="summary-why">{% if sm.missing_users %}Not run for: {{ sm.missing_users | join(", ") }} (not signed in).{% elif not sm.verdict %}Result from an older proof version; run it again.{% else %}Some checks were skipped.{% endif %} PASS needs all three users and no skipped checks.</p>
+  {% endif %}
+  <p class="muted">
+    Run at {{ result.ran_at }}{% if result.duration_seconds %} ({{ result.duration_seconds }}s){% endif %} against <code>{{ result.api_base }}</code>.
+    {% if result.git %}Code <code>{{ result.git.sha }}</code>{% if result.git.porcelain_count %} + {{ result.git.porcelain_count }} uncommitted file(s){% endif %}.{% endif %}
+    {% if result.server_started_at %}Server started {{ result.server_started_at }}.{% endif %}
+    {% if sm.skipped %}{{ sm.skipped }} skipped (user not signed in).{% endif %}
+    {% if sm.ai_not_configured %}{{ sm.ai_not_configured }} ask cells: AI not configured.{% endif %}
+    Saved to <code>docs/proof/latest.json</code>.
+  </p>
+
+  <h2>Action matrix</h2>
+  <div class="table-wrap">
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th>Action</th>
+          {% for u in result.users %}<th class="wrap">{{ u.upn or u.key }}<br><small>{{ u.expected_role }}</small></th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in result.actions %}
+        <tr>
+          <th scope="row">{{ a.label }}</th>
+          {% for u in result.users %}
+          {% set c = result.cells[a.id][u.key] %}
+          <td>
+            {% if c.skipped %}
+              <span class="muted">skipped</span><br><small>{{ c.note }}</small>
+            {% else %}
+              <div class="cell-top">
+                <span class="icon">{% if c.allowed is sameas true %}✅ allowed{% elif c.allowed is sameas false %}⛔ denied{% else %}⚠️ error{% endif %}</span>
+                <span class="status">HTTP {{ c.status }}</span>
+                <span class="tag {{ 'pass' if c.passed else 'fail' }}">{{ 'PASS' if c.passed else 'FAIL' }}</span>
+              </div>
+              <small>expected {{ c.expected }}</small>
+              {% if c.ai == "not configured" %}<br><span class="tag ai">AI not configured</span>{% endif %}
+              {% if c.note %}<br><small class="note">{{ c.note }}</small>{% endif %}
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Global negative checks</h2>
+  <div class="table-wrap">
+    <table class="matrix">
+      <thead><tr><th>Check</th><th>Request</th><th>Status</th><th>Expected</th><th>Verdict</th></tr></thead>
+      <tbody>
+        {% for n in result.negatives %}
+        <tr>
+          <th scope="row">{{ n.label }}</th>
+          <td><code>{{ n.request }}</code></td>
+          <td>{{ n.status if n.status is not none else "—" }}</td>
+          <td>{{ n.expected }}</td>
+          <td>{% if n.passed is none %}<span class="muted">{{ n.note }}</span>{% else %}<span class="tag {{ 'pass' if n.passed else 'fail' }}">{{ 'PASS' if n.passed else 'FAIL' }}</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">Leak check: the whole body of every response (answers, data, errors) is scanned for the canary, row id, names, emails and ARR of every row in a collection the contract table says that user may not read; any hit fails that check. Unauthenticated checks may contain no row at all.</p>
+</section>
+{% elif s.entra_configured %}
+<section class="panel"><p class="muted">No run yet. Sign in the users above, then press <strong>Run proof</strong>.</p></section>
+{% endif %}
+<script src="/static/proof.js"></script>
+{% endblock %}
